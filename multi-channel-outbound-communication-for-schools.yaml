@@ -1,0 +1,759 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: CloudFormation Template for bus demo
+Parameters:
+  ConnectInstanceARN:
+      Type: String
+      Description: "Enter in your ARN for your Amazon Connect Instance. The format should be as follows: arn:aws:connect:<AWSRegion>:<AccountNumber>:instance/<ConnectInstanceID>"
+  ConnectInstanceID:
+      Type: String
+      Description: "Enter in your instance ID. This is the last numbers after the final slash in the Connect instance ARN. For example, the ConnectInstanceID at the end of the following ARN arn:aws:connect:<AWSRegion>:<AccountNumber>:instance/<ConnectInstanceID>"
+  ConnectOutboundCampaignQueueARN:
+      Type: String
+      Description: "Enter in the ARN of the Connect Queue that will be associated with the Outbound Campaign. This is located under the Queue information in the Queue settings."
+  ConnectPhoneNumber:
+      Type: String
+      Description: "Enter in the Phone Number that will be associated with the Outbound Campaign. For the format, put in + followed by the country code and then the phone number. For Example: +12223334444"
+  OutboundCampaignKMSKeyARN:
+      Type: String
+      Description: "Enter in the arn for the KMS key that is associated with the Outbound Campaign. This can be found under Encryption settings in Telephony options"
+Resources:
+    ConnectCampaign:
+      Type: AWS::ConnectCampaigns::Campaign
+      Properties:
+        ConnectInstanceArn:
+          Ref: ConnectInstanceARN
+        DialerConfig:
+          ProgressiveDialerConfig:
+            BandwidthAllocation: 1.0
+        Name: Outbound_Campaign_Bus_Demo
+        OutboundCallConfig:
+          ConnectContactFlowArn: !GetAtt OutboundCampaignContactFlow.ContactFlowArn
+          ConnectQueueArn:
+            Ref: ConnectOutboundCampaignQueueARN
+          ConnectSourcePhoneNumber:
+            Ref: ConnectPhoneNumber
+    ConnectOutboundCampaignIAMRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: "Outbound-Campaign-Pinpoint-Policy"
+        Policies:
+          - PolicyName: KMSPolicy
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: "Allow"
+                  Action:
+                    - 'kms:Decrypt'
+                  Resource: !Ref OutboundCampaignKMSKeyARN
+          - PolicyName: OutboundCampaignPolicy
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: "Allow"
+                  Action:
+                    - 'connect-campaigns:PutDialRequestBatch'
+                    - 'connect-campaigns:StartCampaign'
+                    - 'connect-campaigns:GetCampaignState'
+                    - 'connect-campaigns:CreateCampaign'
+                  Resource: !GetAtt ConnectCampaign.Arn
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - pinpoint.amazonaws.com
+              Action:
+                - 'sts:AssumeRole'
+        Description: "IAM role created for Bus Demo"
+    LambdaIAMRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: "BusDemoLambdaRoleIAM"
+        Policies:
+          - PolicyName: CFTPolicy
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: "Allow"
+                  Action:
+                    - 'logs:CreateLogGroup'
+                    - 'logs:CreateLogStream'
+                    - 'logs:PutLogEvents'
+                    - 'mobiletargeting:CreateJourney'
+                    - 'mobiletargeting:GetJourney'
+                    - 'mobiletargeting:ListJourneys'
+                    - 'mobiletargeting:UpdateJourney'
+                    - 'mobiletargeting:UpdateJourneyState'
+                    - 'mobiletargeting:ListTemplates'
+                    - 'mobiletargeting:GetEmailTemplate'
+                    - 'mobiletargeting:GetSmsTemplate'
+                    - 'mobiletargeting:GetVoiceTemplate'
+                    - 'mobiletargeting:SendMessages'
+                    - 'iam:GetPolicy'
+                    - 'iam:GetPolicyVersion'
+                    - 'iam:GetRole'
+                    - 'connect:DescribeInstance'
+                    - 'connect:DescribeInstanceAttribute'
+                    - 'connect:UpdateInstanceAttribute'
+                    - 'connect:ListInstances'
+                  Resource: '*'
+          - PolicyName: CFTPassRolePolicy
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: "Allow"
+                  Action:
+                    - 'iam:PassRole'
+                  Resource: !GetAtt ConnectOutboundCampaignIAMRole.Arn
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - lambda.amazonaws.com
+              Action:
+                - 'sts:AssumeRole'
+        Description: "IAM role created Lambda for Bus Demo"
+    LambdaAPIIAMRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: "BusDemoLambdaAPIRoleIAM"
+        Policies:
+          - PolicyName: CFTPolicy
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: "Allow"
+                  Action:
+                    - 'logs:CreateLogGroup'
+                    - 'logs:CreateLogStream'
+                    - 'logs:PutLogEvents'
+                    - 'mobiletargeting:CreateJourney'
+                    - 'mobiletargeting:GetJourney'
+                    - 'mobiletargeting:ListJourneys'
+                    - 'mobiletargeting:UpdateJourney'
+                    - 'mobiletargeting:UpdateJourneyState'
+                    - 'mobiletargeting:ListTemplates'
+                    - 'mobiletargeting:GetEmailTemplate'
+                    - 'mobiletargeting:GetSmsTemplate'
+                    - 'mobiletargeting:GetVoiceTemplate'
+                    - 'mobiletargeting:SendMessages'
+                    - 'iam:GetPolicy'
+                    - 'iam:GetPolicyVersion'
+                    - 'iam:GetRole'
+                    - 'connect:DescribeInstance'
+                    - 'connect:DescribeInstanceAttribute'
+                    - 'connect:UpdateInstanceAttribute'
+                    - 'connect:ListInstances'
+                    - 'connect:AssociateBot'
+                    - 'connect:AssociateLexBot'
+                    - 'connect:AssociateLambdaFunction'
+                    - 'connect:ListLambdaFunctions'
+                    - 'connect:ListLexBots'
+                    - 'connect:DisassociateLexBot'
+                    - 'connect:DisassociateBot'
+                    - 'connect:ListBots'
+                    - 'iam:CreateServiceLinkedRole'
+                    - 'iam:PutRolePolicy'
+                    - 'lex:GetBot'
+                    - 'lex:GetBots'
+                    - 'lex:GetBotAlias'
+                    - 'lex:GetBotAliases'
+                    - 'lambda:PublishLayerVersion'
+                    - 's3:PutObject'
+                    - 's3:GetObject'
+                    - 's3:CreateBucket'
+                    - 's3:PutBucketPublicAccessBlock'
+                    - 's3-object-lambda:GetObject'
+                    - 's3-object-lambda:ListBucket'
+                    - 's3-object-lambda:PutObject'
+                    - 'lex:GetBotAlias'
+                    - 'lex:ListBotRecommendations'
+                    - 'lex:DescribeBotVersion'
+                    - 'lex:GetSession'
+                    - 'lex:ListTagsForResource'
+                    - 'lex:DescribeResourcePolicy'
+                    - 'lex:DescribeSlotType'
+                    - 'lex:ListBotAliases'
+                    - 'lex:DescribeBotAlias'
+                    - 'lex:CreateResourcePolicy'
+                    - 'lex:DeleteResourcePolicy'
+                    - 'lex:UpdateResourcePolicy'
+                  Resource: '*'
+          - PolicyName: CFTPassRolePolicy
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: "Allow"
+                  Action:
+                    - 'iam:PassRole'
+                  Resource: !GetAtt ConnectOutboundCampaignIAMRole.Arn
+          - PolicyName: CFTLambdaAccessPolicy
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: "Allow"
+                  Action:
+                    - 'lambda:CreateFunction'
+                    - 'lambda:TagResource'
+                    - 'lambda:DeleteProvisionedConcurrencyConfig'
+                    - 'lambda:GetFunctionConfiguration'
+                    - 'lambda:EnableReplication'
+                    - 'lambda:ListProvisionedConcurrencyConfigs'
+                    - 'lambda:DisableReplication'
+                    - 'lambda:GetProvisionedConcurrencyConfig'
+                    - 'lambda:ListLayers'
+                    - 'lambda:ListLayerVersions'
+                    - 'lambda:DeleteFunction'
+                    - 'lambda:GetAlias'
+                    - 'lambda:ListCodeSigningConfigs'
+                    - 'lambda:UpdateFunctionUrlConfig'
+                    - 'lambda:CreateFunctionUrlConfig'
+                    - 'lambda:UpdateFunctionEventInvokeConfig'
+                    - 'lambda:DeleteFunctionCodeSigningConfig'
+                    - 'lambda:InvokeFunctionUrl'
+                    - 'lambda:ListFunctions'
+                    - 'lambda:GetEventSourceMapping'
+                    - 'lambda:InvokeFunction'
+                    - 'lambda:ListAliases'
+                    - 'lambda:GetFunctionUrlConfig'
+                    - 'lambda:AddLayerVersionPermission'
+                    - 'lambda:GetFunctionCodeSigningConfig'
+                    - 'lambda:UpdateAlias'
+                    - 'lambda:UpdateFunctionCode'
+                    - 'lambda:ListFunctionEventInvokeConfigs'
+                    - 'lambda:PutRuntimeManagementConfig'
+                    - 'lambda:ListFunctionsByCodeSigningConfig'
+                    - 'lambda:GetFunctionConcurrency'
+                    - 'lambda:PutProvisionedConcurrencyConfig'
+                    - 'lambda:ListEventSourceMappings'
+                    - 'lambda:PublishVersion'
+                    - 'lambda:DeleteEventSourceMapping'
+                    - 'lambda:CreateAlias'
+                    - 'lambda:ListVersionsByFunction'
+                    - 'lambda:GetLayerVersion'
+                    - 'lambda:PublishLayerVersion'
+                    - 'lambda:InvokeAsync'
+                    - 'lambda:GetAccountSettings'
+                    - 'lambda:CreateEventSourceMapping'
+                    - 'lambda:GetLayerVersionPolicy'
+                    - 'lambda:UntagResource'
+                    - 'lambda:RemoveLayerVersionPermission'
+                    - 'lambda:PutFunctionConcurrency'
+                    - 'lambda:DeleteCodeSigningConfig'
+                    - 'lambda:ListTags'
+                    - 'lambda:GetRuntimeManagementConfig'
+                    - 'lambda:DeleteLayerVersion'
+                    - 'lambda:PutFunctionEventInvokeConfig'
+                    - 'lambda:DeleteFunctionEventInvokeConfig'
+                    - 'lambda:CreateCodeSigningConfig'
+                    - 'lambda:PutFunctionCodeSigningConfig'
+                    - 'lambda:UpdateEventSourceMapping'
+                    - 'lambda:UpdateFunctionCodeSigningConfig'
+                    - 'lambda:GetFunction'
+                    - 'lambda:UpdateFunctionConfiguration'
+                    - 'lambda:ListFunctionUrlConfigs'
+                    - 'lambda:UpdateCodeSigningConfig'
+                    - 'lambda:AddPermission'
+                    - 'lambda:GetFunctionEventInvokeConfig'
+                    - 'lambda:DeleteAlias'
+                    - 'lambda:DeleteFunctionConcurrency'
+                    - 'lambda:GetCodeSigningConfig'
+                    - 'lambda:DeleteFunctionUrlConfig'
+                    - 'lambda:RemovePermission'
+                    - 'lambda:GetPolicy'
+                  Resource: '*'
+          - PolicyName: CFTIAMS3Policy
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: "Allow"
+                  Action:
+                    - 's3:PutObject'
+                    - 's3:GetObject'
+                    - 's3:CreateBucket'
+                    - 's3:PutBucketPublicAccessBlock'
+                    - 's3-object-lambda:GetObject'
+                    - 's3-object-lambda:ListBucket'
+                    - 's3-object-lambda:PutObject'
+                  Resource: '*'
+          - PolicyName: CFTIAMPolicy
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: "Allow"
+                  Action:
+                    - 'iam:PutRolePolicy'
+                  Resource: '*'
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - lambda.amazonaws.com
+              Action:
+                - 'sts:AssumeRole'
+        Description: "IAM role created Lambda for Bus Demo"
+    LexBotIAMRole:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - lexv2.amazonaws.com
+              Action:
+                - "sts:AssumeRole"
+        Path: "/"
+        Policies:
+          - PolicyName: LexRuntimeRolePolicy
+            PolicyDocument:
+              Version: 2012-10-17
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - "polly:SynthesizeSpeech"
+                    - "comprehend:DetectSentiment"
+                  Resource: "*"
+    BusDemoLexBot:
+      Type: AWS::Lex::Bot
+      Properties:
+        BotLocales:
+          - LocaleId: "en_US"
+            NluConfidenceThreshold: 0.40
+            VoiceSettings:
+              VoiceId: "Joanna"
+            Description: "Lex bot for the Bus Demo"
+            SlotTypes:
+              - Name: "yes_no_slot_type"
+                Description: "Yes or no slot values"
+                SlotTypeValues:
+                  - SampleValue:
+                      Value: "No"
+                  - SampleValue:
+                      Value: "Yes"
+                ValueSelectionSetting:
+                  ResolutionStrategy: ORIGINAL_VALUE
+            Intents:
+              - Name: "FallbackIntent"
+                Description: "Default intent when no other intent matches"
+                ParentIntentSignature: "AMAZON.FallbackIntent"
+              - Name: "BusDelay_Intent"
+                IntentClosingSetting:
+                  ClosingResponse:
+                    AllowInterrupt: True
+                    MessageGroupsList:
+                      - Message:
+                          PlainTextMessage:
+                            Value: "Thank you! I will go ahead and update the bus status and send an update to the student's parents."
+                  IsActive: True
+                Description: "Intent for the bus delay"
+                SampleUtterances:
+                  - Utterance: "I want to report that my bus broke down"
+                  - Utterance: "My bus broke down"
+                  - Utterance: "I want to report a bus delay"
+                  - Utterance: "Bus broke down"
+                SlotPriorities:
+                  - Priority: 2
+                    SlotName: BusNumber
+                  - Priority: 1
+                    SlotName: YesNoSlot
+                Slots:
+                  - Name: "BusNumber"
+                    Description: "Slot for the bus number"
+                    SlotTypeName: "AMAZON.Number"
+                    ValueElicitationSetting:
+                      SlotConstraint: "Required"
+                      PromptSpecification:
+                        MessageGroupsList:
+                          - Message:
+                              PlainTextMessage:
+                                Value: "Okay, thank you. What is your bus number?"
+                        MaxRetries: 4
+                        AllowInterrupt: true
+                  - Name: "YesNoSlot"
+                    Description: "Slot for yes no confirmation"
+                    SlotTypeName: "yes_no_slot_type"
+                    ValueElicitationSetting:
+                      SlotConstraint: "Required"
+                      PromptSpecification:
+                        MessageGroupsList:
+                          - Message:
+                              PlainTextMessage:
+                                Value: "Just to confirm, you're calling to say that the bus broke down?"
+                        MaxRetries: 4
+                        AllowInterrupt: true
+        DataPrivacy:
+          ChildDirected: false
+        Description: "Bus Demo Lex Bot"
+        IdleSessionTTLInSeconds: 300
+        Name: "Edu_Demo_Bot"
+        RoleArn: !GetAtt LexBotIAMRole.Arn
+    LexBotVersion:
+      Type: AWS::Lex::BotVersion
+      Properties:
+        BotId: !GetAtt BusDemoLexBot.Id
+        BotVersionLocaleSpecification:
+          - LocaleId: en_US
+            BotVersionLocaleDetails:
+              SourceBotVersion: DRAFT
+    LexBotAlias:
+      Type: AWS::Lex::BotAlias
+      Properties:
+        BotAliasName: "LexBot-BusDemo-Alias"
+        BotId: !GetAtt BusDemoLexBot.Id
+        BotVersion: !GetAtt LexBotVersion.BotVersion
+    PinpointProject:
+      Type: AWS::Pinpoint::App
+      Properties:
+        Name: Bus-Pinpoint-Project
+    PinpointProjectSMS:
+      Type: AWS::Pinpoint::SMSChannel
+      Properties:
+        ApplicationId: !Ref PinpointProject
+        Enabled: True
+    PinpointEmailTemplate:
+      Type: AWS::Pinpoint::EmailTemplate
+      Properties:
+        Subject: "Bus Delay"
+        TemplateDescription: String
+        TemplateName: "Bus-Email-Channel-Template"
+        TextPart: "Hello, this is a message is to inform you that your child's bus has been delayed. We will send another message once the bus starts moving again. Thank you!"
+    PinpointSMSTemplate:
+      Type: AWS::Pinpoint::SmsTemplate
+      Properties:
+        Body: "Hello, this is a message is to inform you that your child's bus has been delayed. We will send another message once the bus starts moving again. Thank you!"
+        TemplateName: "Bus-SMS-Channel-Template"
+    # LambdaLayerCreate:
+    #   Type: AWS::Lambda::Function
+    #   Properties:
+    #     Environment:
+    #       Variables:
+    #         ConnectID: !Ref ConnectInstanceID
+    #     Role: !GetAtt LambdaAPIIAMRole.Arn
+    #     Handler: index.lambda_handler
+    #     Runtime: "python3.9"
+    #     Timeout: 20
+    #     Code:
+    #       ZipFile: |
+    #         import json
+    #         import boto3
+    #         import os
+
+    #         client = boto3.client('lambda')
+
+    #         connect_instance_id = os.environ.get('ConnectID')
+    #         name = "bus-demo" + "-" + connect_instance_id
+
+    #         def createLayer():
+    #             response = client.publish_layer_version(
+    #                 LayerName='Bus-Demo-Lambda-Layer',
+    #                 Content={
+    #                     'S3Bucket': name,
+    #                     'S3Key': 'my-deployment-package.zip'
+    #                 },
+    #                 CompatibleRuntimes=[
+    #                     'python3.9'
+    #                 ]
+    #             )
+
+    #         def lambda_handler(event, context):
+    #             createLayer()
+    #             return {
+    #                 'statusCode': 200,
+    #                 'body': json.dumps('Hello from Lambda!')
+    #             }
+    LambdaAPI:
+      Type: AWS::Lambda::Function
+      Properties:
+        Environment:
+          Variables:
+            LexBotName : !GetAtt LexBotAlias.Arn
+            LambdaConnect1: !GetAtt LambdaPinpointSMSEmail.Arn
+            LambdaConnect2: !GetAtt LambdaPinpointOutboundCampaign.Arn
+            ConnectARN: !Ref ConnectInstanceARN
+            ConnectID: !Ref ConnectInstanceID
+            ConnectFlowID: !Ref MainContactFlow
+            Region: !Ref AWS::Region
+        Role: !GetAtt LambdaAPIIAMRole.Arn
+        Handler: index.lambda_handler
+        Runtime: "python3.9"
+        Code:
+          ZipFile: |
+            import json
+            import boto3
+            import os
+
+            connect_client = boto3.client('connect')
+            s3_client = boto3.client('s3')
+
+            botName = os.environ.get('LexBotName')
+            lambda1 = os.environ.get('LambdaConnect1')
+            lambda2 = os.environ.get('LambdaConnect2')
+            connectArn = os.environ.get('ConnectInstanceARN')
+            connectNumber = os.environ.get('ConnectNumber')
+            connect_instance_id = os.environ.get('ConnectID')
+            connectFlowID = os.environ.get('ConnectFlowID')
+            name = "bus-demo" + "-" + connect_instance_id
+            region = os.environ.get('Region')
+
+            def associateBotConnect():
+                response = connect_client.associate_bot(
+                    InstanceId = connect_instance_id,
+                        LexV2Bot={
+                            'AliasArn': botName
+                  }
+            )
+
+            def associateLambda(lambda_name):
+                response = connect_client.associate_lambda_function(
+                    InstanceId = connect_instance_id,
+                    FunctionArn = lambda_name
+                )
+
+
+            def lambda_handler(event, context):
+                associateBotConnect()
+                associateLambda(lambda1)
+                associateLambda(lambda2)
+
+                return {
+                    'statusCode': 200,
+                    'body': json.dumps('Hello from Lambda!')
+                }
+    LambdaPinpointSMSEmail:
+      Type: AWS::Lambda::Function
+      Properties:
+        Environment:
+          Variables:
+            PinpointApplicationId : !Ref PinpointProject
+            SMSEmailSegmentId: "Email and SMS Pinpoint Segment ID"
+            EmailId : "Email used to send the Bus Alerts out"
+            Region: !Ref AWS::Region
+        Runtime: "python3.9"
+        Role: !GetAtt LambdaIAMRole.Arn
+        Handler: index.lambda_handler
+        Code:
+          ZipFile: |
+            import json
+            import boto3
+            import os
+
+            import datetime
+            import random
+
+            currRegion = os.environ.get('Region')
+            client = boto3.client('pinpoint')
+            appID = os.environ.get('PinpointApplicationId')
+            smsEmailSegmentID = os.environ.get('SMSEmailSegmentId')
+            emailAddress = os.environ.get('EmailId')
+
+            def createEvent():
+                curr_date_time = datetime.datetime.now()
+                start_date_time = curr_date_time + datetime.timedelta(0,30)
+                end_date_time = curr_date_time + datetime.timedelta(0,3000)
+
+                eventActive = False
+                while (eventActive == False):
+                    randomNum = random.randint(0,1000)
+                    randomEmailNum = random.randint(2000,3000)
+                    newAttemptName = 'Attempt' + str(randomNum)
+                    try:
+                        newEvent(newAttemptName, end_date_time, start_date_time)
+                        eventActive = True
+                    except Exception as e:
+                        print(e)
+
+            def newEvent(attemptName, end_date_time, start_date_time):
+                response = client.create_journey(
+                    ApplicationId = appID,
+                    WriteJourneyRequest = {
+                        'LocalTime': False,
+                        'Name' : attemptName,
+                        'Limits': {
+                            'EndpointReentryInterval': 'P1D'
+                        },
+                        'StartCondition' : {
+                            'SegmentStartCondition' : {
+                                'SegmentId' : smsEmailSegmentID
+                            },
+
+                        },
+                        'Schedule' : {
+                            'EndTime': end_date_time,
+                            'StartTime': start_date_time,
+                            'Timezone' : 'UTC'
+                        },
+                        'Activities' : {
+                            'KTR5zCDBWY': {
+                                'SMS': {
+                                    'MessageConfig': {
+                                        'MessageType': 'PROMOTIONAL'
+                                    },
+                                    'NextActivity': 'N5aNHbuleH',
+                                    'TemplateName': 'Bus-SMS-Channel-Template'
+                                }
+                            },
+                            'N5aNHbuleH': {
+                                'EMAIL': {
+                                    'MessageConfig': {
+                                        'FromAddress': emailAddress
+                                    },
+                                    'TemplateName': 'Bus-Email-Channel-Template'
+                                }
+                            },
+                        },
+                        'RefreshOnSegmentUpdate': True,
+                        'StartActivity': 'KTR5zCDBWY',
+                        'State' : 'ACTIVE',
+                    }
+                )
+
+            def lambda_handler(event, context):
+
+                response = createEvent()
+                return {
+                    'statusCode': 200,
+                    'body': json.dumps('Hello from Lambda!')
+                }
+    LambdaPinpointOutboundCampaign:
+      Type: AWS::Lambda::Function
+      Properties:
+        Environment:
+          Variables:
+            PinpointApplicationId : !Ref PinpointProject
+            VoiceSegmentId: "Voice Pinpoint Segment ID"
+            ConnectCampaignArn : !GetAtt ConnectCampaign.Arn
+            ConnectExecutionRoleARN: !GetAtt ConnectOutboundCampaignIAMRole.Arn
+
+        Role: !GetAtt LambdaIAMRole.Arn
+        Handler: index.lambda_handler
+        Runtime: "python3.9"
+        Code:
+          ZipFile: |
+            import json
+            import boto3 as py2
+            import os
+
+            import datetime
+            import random
+
+            currRegion = os.environ.get('Region')
+            client = py2.client('pinpoint', region_name = currRegion)
+            appID = os.environ.get('PinpointApplicationId')
+            voiceSegmentID = os.environ.get('VoiceSegmentId')
+            connectCampaignArn = os.environ.get('ConnectCampaignArn')
+            connectCampaignExecutionRoleArn = os.environ.get('ConnectExecutionRoleARN')
+
+            def createEvent():
+                curr_date_time = datetime.datetime.now()
+                start_date_time = curr_date_time + datetime.timedelta(0,30)
+                end_date_time = curr_date_time + datetime.timedelta(0,3000)
+                randomNum = random.randint(0,1000)
+                randomEmailNum = random.randint(2000,3000)
+                newAttemptName = 'Attempt' + str(randomNum)
+                newEvent(newAttemptName, end_date_time, start_date_time)
+
+            def newEvent(attemptName, end_date_time, start_date_time):
+                response = client.create_journey(
+                    ApplicationId = appID,
+                    WriteJourneyRequest = {
+                        'LocalTime': False,
+                        'Name' : attemptName,
+                        'Limits': {
+                            'EndpointReentryInterval': 'P1D'
+                        },
+                        'StartCondition' : {
+                            'SegmentStartCondition' : {
+                                'SegmentId' : voiceSegmentID
+                            },
+
+                        },
+                        'Schedule' : {
+                            'EndTime': end_date_time,
+                            'StartTime': start_date_time,
+                            'Timezone' : 'UTC'
+                        },
+                        'Activities' : {
+                            'q3ppIg8zos': {
+                                'ContactCenter': {
+                                }
+                            }
+                        },
+                        'RefreshOnSegmentUpdate': True,
+                        'StartActivity': 'q3ppIg8zos',
+                        'State' : 'ACTIVE',
+                        'JourneyChannelSettings' : {
+                            'ConnectCampaignArn': connectCampaignArn,
+                            'ConnectCampaignExecutionRoleArn': connectCampaignExecutionRoleArn
+                        }
+                    }
+                )
+
+            def lambda_handler(event, context):
+                print(py2.__version__)
+                createEvent()
+                return {
+                    'statusCode': 200,
+                    'body': json.dumps('Hello from Lambda!')
+                }
+    LambdaLexFulfillment:
+      Type: AWS::Lambda::Function
+      Properties:
+        Role: !GetAtt LambdaIAMRole.Arn
+        Handler: index.lambda_handler
+        Runtime: "python3.9"
+        Code:
+          ZipFile: |
+            import json
+            import boto3
+            from boto3.dynamodb.conditions import Key
+            import datetime
+            import random
+
+
+            def lambda_handler(event, context):
+                currSlots = event['currentIntent']['slots']
+                busNum = currSlots['BusNumber']
+                busNum = str(busNum)
+
+                return {
+                    "dialogAction": {
+                        "type": "Close",
+                        "fulfillmentState": "Fulfilled",
+                        "message": {
+                            "contentType": "PlainText",
+                            "content": "Thank you! I will go ahead and update the bus status and send an update to the student's parents."
+                        }
+                    }
+                }
+    MainContactFlow:
+      Type: AWS::Connect::ContactFlow
+      Properties:
+        Name: "Bus-Delay-ContactFlow"
+        InstanceArn:
+          Ref: ConnectInstanceARN
+        Type: "CONTACT_FLOW"
+        Content: |
+          {"Version":"2019-10-30",
+            "StartAction":"153e2b75-3a1f-4e2f-a251-4c0ed0abfecc",
+            "Metadata":{"entryPointPosition":{"x":15,"y":15},"snapToGrid":false,"ActionMetadata":{"153e2b75-3a1f-4e2f-a251-4c0ed0abfecc":{"position":{"x":163,"y":138}},"a7777449-8077-4580-8308-aca06bdc0c52":{"position":{"x":412,"y":516},"conditionMetadata":[{"id":"47918fba-b70e-4dc0-8611-5b01f380e1b5","value":"BusDelay_Intent"},{"id":"fe897f95-0678-4b66-8439-245676933b73","value":"BusUpdate_Intent"}],"useDynamic":false,"dynamicMetadata":{},"useLexBotDropdown":true,"useDynamicLexBotArn":false,"lexV2BotName":"Edu_Demo_Bot"},"62a01b50-0a65-499f-8ebf-34a0a4123d5d":{"position":{"x":664,"y":351},"dynamicParams":["YesNoAttribute","BusNumAttribute"]},"95b0f807-45f7-497a-aa6c-1d939144f5a8":{"position":{"x":892,"y":103},"conditionMetadata":[{"operator":{"name":"Contains","value":"Contains","shortDisplay":"contains"},"value":"Yes","id":"97f2bc8b-27ba-4247-8d76-540481f23f1a"},{"operator":{"name":"Contains","value":"Contains","shortDisplay":"contains"},
+            "value":"No","id":"2d865f9d-1144-410c-ae5b-0f5bf857bc40"},{"operator":{"name":"Contains","value":"Contains","shortDisplay":"contains"},"value":"yes","id":"f47c343d-1b1e-4dc8-9d40-0cc07e0a0c96"},{"operator":{"name":"Contains","value":"Contains","shortDisplay":"contains"},"value":"no","id":"896b13b0-7fe8-4890-852b-182c9e3ab512"}]},"18b171cd-000d-4036-90e3-10c6ac3ae1a8":{"position":{"x":1131,"y":66},"dynamicMetadata":{},"useDynamic":false},"cdcb242d-acc3-40b5-b742-ebf6e9c31c04":{"position":{"x":1957,"y":674}},"cf204906-c306-4324-bb66-136130f50a81":{"position":{"x":1395,"y":14},"dynamicMetadata":{},"useDynamic":false},"72954a4e-e968-4a25-ae47-0a703dc4375a":{"position":{"x":1827,"y":149},"useDynamic":false}}},"Actions":[{"Identifier":"153e2b75-3a1f-4e2f-a251-4c0ed0abfecc","Parameters":{"FlowLoggingBehavior":"Enabled"},"Transitions":{"NextAction":"a7777449-8077-4580-8308-aca06bdc0c52","Errors":[],"Conditions":[]},"Type":"UpdateFlowLoggingBehavior"},
+            {"Identifier":"a7777449-8077-4580-8308-aca06bdc0c52","Parameters":{"Text":"Hello, welcome to the student transportation services! How can I help you today?","LexBot":{"Name":"Edu_Demo_Bot","Region":"us-east-1","Alias":"$LATEST"}},"Transitions":{"NextAction":"cdcb242d-acc3-40b5-b742-ebf6e9c31c04","Errors":[{"NextAction":"cdcb242d-acc3-40b5-b742-ebf6e9c31c04","ErrorType":"NoMatchingError"},{"NextAction":"cdcb242d-acc3-40b5-b742-ebf6e9c31c04","ErrorType":"NoMatchingCondition"}],"Conditions":[{"NextAction":"62a01b50-0a65-499f-8ebf-34a0a4123d5d","Condition":{"Operator":"Equals","Operands":["BusDelay_Intent"]}},{"NextAction":"cdcb242d-acc3-40b5-b742-ebf6e9c31c04","Condition":{"Operator":"Equals","Operands":["BusUpdate_Intent"]}}]},"Type":"ConnectParticipantWithLexBot"},{"Identifier":"62a01b50-0a65-499f-8ebf-34a0a4123d5d","Parameters":
+              {"Attributes":{"BusNumAttribute":"$.External.$.<U+200B>BusNumber","YesNoAttribute":"$.Lex.Slots.<U+200B>YesNoSlot"}},"Transitions":{"NextAction":"95b0f807-45f7-497a-aa6c-1d939144f5a8","Errors":[{"NextAction":"cdcb242d-acc3-40b5-b742-ebf6e9c31c04","ErrorType":"NoMatchingError"}],"Conditions":[]},"Type":"UpdateContactAttributes"},{"Identifier":"95b0f807-45f7-497a-aa6c-1d939144f5a8","Parameters":{"ComparisonValue":"$.Lex.Slots.<U+200B>YesNoSlot"},"Transitions":{"NextAction":"cdcb242d-acc3-40b5-b742-ebf6e9c31c04","Errors":[{"NextAction":"cdcb242d-acc3-40b5-b742-ebf6e9c31c04","ErrorType":"NoMatchingCondition"}],"Conditions":[{"NextAction":"18b171cd-000d-4036-90e3-10c6ac3ae1a8","Condition":{"Operator":"TextContains","Operands":["Yes"]}},{"NextAction":"cdcb242d-acc3-40b5-b742-ebf6e9c31c04","Condition":{"Operator":"TextContains","Operands":["No"]}},{"NextAction":"18b171cd-000d-4036-90e3-10c6ac3ae1a8","Condition":{"Operator":"TextContains","Operands":["yes"]}},
+              {"NextAction":"cdcb242d-acc3-40b5-b742-ebf6e9c31c04","Condition":{"Operator":"TextContains","Operands":["no"]}}]},"Type":"Compare"},{"Identifier":"18b171cd-000d-4036-90e3-10c6ac3ae1a8","Parameters":{"LambdaFunctionARN":"arn:aws:lambda:us-east-1:046898876299:function:Create-Pinpoint-Journey-Lambda","InvocationTimeLimitSeconds":"3"},"Transitions":{"NextAction":"cf204906-c306-4324-bb66-136130f50a81","Errors":[{"NextAction":"cdcb242d-acc3-40b5-b742-ebf6e9c31c04","ErrorType":"NoMatchingError"}],"Conditions":[]},"Type":"InvokeLambdaFunction"},{"Identifier":"cdcb242d-acc3-40b5-b742-ebf6e9c31c04","Type":"DisconnectParticipant","Parameters":{},"Transitions":{}},{"Identifier":"cf204906-c306-4324-bb66-136130f50a81","Parameters":{"LambdaFunctionARN":"arn:aws:lambda:us-east-1:046898876299:function:Bus_Edu_HVOC_Lambda","InvocationTimeLimitSeconds":"3"},"Transitions":{"NextAction":"72954a4e-e968-4a25-ae47-0a703dc4375a",
+              "Errors":[{"NextAction":"72954a4e-e968-4a25-ae47-0a703dc4375a","ErrorType":"NoMatchingError"}],"Conditions":[]},"Type":"InvokeLambdaFunction"},{"Identifier":"72954a4e-e968-4a25-ae47-0a703dc4375a","Parameters":{"Text":"Thank you for contacting us, have a good day, bye!"},"Transitions":{"NextAction":"cdcb242d-acc3-40b5-b742-ebf6e9c31c04","Errors":[],"Conditions":[]},"Type":"MessageParticipant"}]}
+    OutboundCampaignContactFlow:
+      Type: AWS::Connect::ContactFlow
+      Properties:
+        Name: "Bus-Delay-Outbound-Campaign-ContactFlow"
+        InstanceArn:
+          Ref: ConnectInstanceARN
+        Type: "CONTACT_FLOW"
+        Content: |
+          {"Version":"2019-10-30","StartAction":"d6276ba6-918e-43ce-a353-d4bfd8607c16","Metadata":{"entryPointPosition":{"x":15,"y":15},"snapToGrid":false,"ActionMetadata":{"d6276ba6-918e-43ce-a353-d4bfd8607c16":{"position":{"x":186,"y":20}},"8153e9d2-c8d7-4230-9180-dd437d3e2f53":{"position":{"x":883,"y":548}},"ea10076c-d61e-4cdd-878f-99eb31353bd7":{"position":{"x":420,"y":15}},"80c8d044-a529-4d63-ab3a-c09c826f21dd":{"position":{"x":148,"y":401}},"39d61c4b-08fa-40b9-a61e-4551c360219c":{"position":{"x":494.2475280761719,"y":470.67572021484375},"useDynamic":false}}},"Actions":[{"Identifier":"d6276ba6-918e-43ce-a353-d4bfd8607c16","Parameters":{"FlowLoggingBehavior":"Enabled"},"Transitions":{"NextAction":"ea10076c-d61e-4cdd-878f-99eb31353bd7","Errors":[],"Conditions":[]},"Type":"UpdateFlowLoggingBehavior"},{"Identifier":"8153e9d2-c8d7-4230-9180-dd437d3e2f53","Type":"DisconnectParticipant","Parameters":{},"Transitions":{}},{"Identifier":"ea10076c-d61e-4cdd-878f-99eb31353bd7","Parameters":{"RecordingBehavior":{"RecordedParticipants":["Agent","Customer"]},"AnalyticsBehavior":{"Enabled":"True","AnalyticsMode":"RealTime","AnalyticsLanguage":"en-US","AnalyticsRedactionBehavior":"Disabled","AnalyticsRedactionResults":"None"}},"Transitions":{"NextAction":"80c8d044-a529-4d63-ab3a-c09c826f21dd","Errors":[],"Conditions":[]},"Type":"UpdateContactRecordingBehavior"},{"Identifier":"80c8d044-a529-4d63-ab3a-c09c826f21dd","Parameters":{},"Transitions":{"NextAction":"39d61c4b-08fa-40b9-a61e-4551c360219c","Errors":[{"NextAction":"39d61c4b-08fa-40b9-a61e-4551c360219c","ErrorType":"NoMatchingError"}],"Conditions":[{"NextAction":"39d61c4b-08fa-40b9-a61e-4551c360219c","Condition":{"Operator":"Equals","Operands":["CallAnswered"]}},{"NextAction":"39d61c4b-08fa-40b9-a61e-4551c360219c","Condition":{"Operator":"Equals","Operands":["VoicemailBeep"]}},{"NextAction":"39d61c4b-08fa-40b9-a61e-4551c360219c","Condition":{"Operator":"Equals","Operands":["VoicemailNoBeep"]}},{"NextAction":"39d61c4b-08fa-40b9-a61e-4551c360219c","Condition":{"Operator":"Equals","Operands":["NotDetected"]}}]},"Type":"CheckOutboundCallStatus"},{"Identifier":"39d61c4b-08fa-40b9-a61e-4551c360219c","Parameters":{"Text":"Hello, this is a message is to inform you that your child's bus has been delayed. We will give you another call once the bus starts moving again. Thank you!"},"Transitions":{"NextAction":"8153e9d2-c8d7-4230-9180-dd437d3e2f53","Errors":[],"Conditions":[]},"Type":"MessageParticipant"}]}
