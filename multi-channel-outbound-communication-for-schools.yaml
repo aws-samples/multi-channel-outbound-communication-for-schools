@@ -37,14 +37,6 @@ Resources:
       Properties:
         RoleName: "Outbound-Campaign-Pinpoint-Policy"
         Policies:
-          - PolicyName: KMSPolicy
-            PolicyDocument:
-              Version: "2012-10-17"
-              Statement:
-                - Effect: "Allow"
-                  Action:
-                    - 'kms:Decrypt'
-                  Resource: !Ref OutboundCampaignKMSKeyARN
           - PolicyName: OutboundCampaignPolicy
             PolicyDocument:
               Version: "2012-10-17"
@@ -53,9 +45,13 @@ Resources:
                   Action:
                     - 'connect-campaigns:PutDialRequestBatch'
                     - 'connect-campaigns:StartCampaign'
+                    - 'kms:Decrypt'
                     - 'connect-campaigns:GetCampaignState'
+                    - 'connect-campaigns:GetCampaignStateBatch'
                     - 'connect-campaigns:CreateCampaign'
-                  Resource: !GetAtt ConnectCampaign.Arn
+                  Resource: 
+                    - !Sub "arn:aws:connect-campaigns:${AWS::Region}:${AWS::AccountId}:campaign/*"                 
+                    - !Ref OutboundCampaignKMSKeyARN
         AssumeRolePolicyDocument:
           Version: "2012-10-17"
           Statement:
@@ -65,13 +61,21 @@ Resources:
                   - pinpoint.amazonaws.com
               Action:
                 - 'sts:AssumeRole'
+              Condition:
+                StringEquals:
+                  "AWS:SourceAccount": !Sub "${AWS::AccountId}"
+                ArnLike:
+                  "AWS:SourceArn": !GetAtt PinpointProject.Arn
+                  "AWS:SourceArn": !Sub 
+                    - "arn:aws:mobiletargeting:${AWS::Region}:${AWS::AccountId}:apps/${PinpointProjectID}/*"
+                    - PinpointProjectID: !Ref PinpointProject
         Description: "IAM role created for Bus Demo"
     LambdaIAMRole:
       Type: AWS::IAM::Role
       Properties:
         RoleName: "BusDemoLambdaRoleIAM"
         Policies:
-          - PolicyName: CFTPolicy
+          - PolicyName: CloudWatchCFTPolicy
             PolicyDocument:
               Version: "2012-10-17"
               Statement:
@@ -80,6 +84,24 @@ Resources:
                     - 'logs:CreateLogGroup'
                     - 'logs:CreateLogStream'
                     - 'logs:PutLogEvents'
+                  Resource: '*'          
+          - PolicyName: ConnectPolicy
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: "Allow"
+                  Action:
+                    - 'connect:DescribeInstance'
+                    - 'connect:DescribeInstanceAttribute'
+                    - 'connect:UpdateInstanceAttribute'
+                    - 'connect:ListInstances'
+                  Resource: !Ref ConnectInstanceARN
+          - PolicyName: CFTPolicyPinpoint
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: "Allow"
+                  Action:
                     - 'mobiletargeting:CreateJourney'
                     - 'mobiletargeting:GetJourney'
                     - 'mobiletargeting:ListJourneys'
@@ -90,14 +112,11 @@ Resources:
                     - 'mobiletargeting:GetSmsTemplate'
                     - 'mobiletargeting:GetVoiceTemplate'
                     - 'mobiletargeting:SendMessages'
-                    - 'iam:GetPolicy'
-                    - 'iam:GetPolicyVersion'
-                    - 'iam:GetRole'
-                    - 'connect:DescribeInstance'
-                    - 'connect:DescribeInstanceAttribute'
-                    - 'connect:UpdateInstanceAttribute'
-                    - 'connect:ListInstances'
-                  Resource: '*'
+                  Resource:
+                    - !GetAtt PinpointProject.Arn
+                    - !GetAtt PinpointEmailTemplate.Arn
+                    - !GetAtt PinpointSMSTemplate.Arn
+                    - !Sub "${PinpointProject.Arn}/*"
           - PolicyName: CFTPassRolePolicy
             PolicyDocument:
               Version: "2012-10-17"
@@ -121,7 +140,7 @@ Resources:
       Properties:
         RoleName: "BusDemoLambdaAPIRoleIAM"
         Policies:
-          - PolicyName: CFTPolicy
+          - PolicyName: CloudWatchCFTPolicy
             PolicyDocument:
               Version: "2012-10-17"
               Statement:
@@ -130,6 +149,13 @@ Resources:
                     - 'logs:CreateLogGroup'
                     - 'logs:CreateLogStream'
                     - 'logs:PutLogEvents'
+                  Resource: '*'          
+          - PolicyName: CFTPolicyPinpoint
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: "Allow"
+                  Action:
                     - 'mobiletargeting:CreateJourney'
                     - 'mobiletargeting:GetJourney'
                     - 'mobiletargeting:ListJourneys'
@@ -140,9 +166,17 @@ Resources:
                     - 'mobiletargeting:GetSmsTemplate'
                     - 'mobiletargeting:GetVoiceTemplate'
                     - 'mobiletargeting:SendMessages'
-                    - 'iam:GetPolicy'
-                    - 'iam:GetPolicyVersion'
-                    - 'iam:GetRole'
+                  Resource:
+                    - !GetAtt PinpointProject.Arn
+                    - !GetAtt PinpointEmailTemplate.Arn
+                    - !GetAtt PinpointSMSTemplate.Arn
+                    - !Sub "${PinpointProject.Arn}/*"                    
+          - PolicyName: ConnectPolicy
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: "Allow"
+                  Action:
                     - 'connect:DescribeInstance'
                     - 'connect:DescribeInstanceAttribute'
                     - 'connect:UpdateInstanceAttribute'
@@ -155,20 +189,20 @@ Resources:
                     - 'connect:DisassociateLexBot'
                     - 'connect:DisassociateBot'
                     - 'connect:ListBots'
-                    - 'iam:CreateServiceLinkedRole'
-                    - 'iam:PutRolePolicy'
+                  Resource:
+                    - !Ref ConnectInstanceARN
+                    - !GetAtt BusDemoLexBot.Arn 
+                    - !GetAtt LexBotAlias.Arn
+          - PolicyName: CFTPolicyLex
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: "Allow"
+                  Action:
                     - 'lex:GetBot'
                     - 'lex:GetBots'
                     - 'lex:GetBotAlias'
                     - 'lex:GetBotAliases'
-                    - 'lambda:PublishLayerVersion'
-                    - 's3:PutObject'
-                    - 's3:GetObject'
-                    - 's3:CreateBucket'
-                    - 's3:PutBucketPublicAccessBlock'
-                    - 's3-object-lambda:GetObject'
-                    - 's3-object-lambda:ListBucket'
-                    - 's3-object-lambda:PutObject'
                     - 'lex:GetBotAlias'
                     - 'lex:ListBotRecommendations'
                     - 'lex:DescribeBotVersion'
@@ -181,7 +215,9 @@ Resources:
                     - 'lex:CreateResourcePolicy'
                     - 'lex:DeleteResourcePolicy'
                     - 'lex:UpdateResourcePolicy'
-                  Resource: '*'
+                  Resource:
+                    - !GetAtt BusDemoLexBot.Arn
+                    - !GetAtt LexBotAlias.Arn
           - PolicyName: CFTPassRolePolicy
             PolicyDocument:
               Version: "2012-10-17"
@@ -196,97 +232,15 @@ Resources:
               Statement:
                 - Effect: "Allow"
                   Action:
-                    - 'lambda:CreateFunction'
-                    - 'lambda:TagResource'
-                    - 'lambda:DeleteProvisionedConcurrencyConfig'
-                    - 'lambda:GetFunctionConfiguration'
-                    - 'lambda:EnableReplication'
-                    - 'lambda:ListProvisionedConcurrencyConfigs'
-                    - 'lambda:DisableReplication'
-                    - 'lambda:GetProvisionedConcurrencyConfig'
-                    - 'lambda:ListLayers'
-                    - 'lambda:ListLayerVersions'
-                    - 'lambda:DeleteFunction'
                     - 'lambda:GetAlias'
-                    - 'lambda:ListCodeSigningConfigs'
-                    - 'lambda:UpdateFunctionUrlConfig'
-                    - 'lambda:CreateFunctionUrlConfig'
-                    - 'lambda:UpdateFunctionEventInvokeConfig'
-                    - 'lambda:DeleteFunctionCodeSigningConfig'
-                    - 'lambda:InvokeFunctionUrl'
                     - 'lambda:ListFunctions'
-                    - 'lambda:GetEventSourceMapping'
-                    - 'lambda:InvokeFunction'
-                    - 'lambda:ListAliases'
-                    - 'lambda:GetFunctionUrlConfig'
-                    - 'lambda:AddLayerVersionPermission'
-                    - 'lambda:GetFunctionCodeSigningConfig'
-                    - 'lambda:UpdateAlias'
-                    - 'lambda:UpdateFunctionCode'
-                    - 'lambda:ListFunctionEventInvokeConfigs'
-                    - 'lambda:PutRuntimeManagementConfig'
-                    - 'lambda:ListFunctionsByCodeSigningConfig'
-                    - 'lambda:GetFunctionConcurrency'
-                    - 'lambda:PutProvisionedConcurrencyConfig'
-                    - 'lambda:ListEventSourceMappings'
-                    - 'lambda:PublishVersion'
-                    - 'lambda:DeleteEventSourceMapping'
-                    - 'lambda:CreateAlias'
-                    - 'lambda:ListVersionsByFunction'
-                    - 'lambda:GetLayerVersion'
-                    - 'lambda:PublishLayerVersion'
-                    - 'lambda:InvokeAsync'
-                    - 'lambda:GetAccountSettings'
-                    - 'lambda:CreateEventSourceMapping'
-                    - 'lambda:GetLayerVersionPolicy'
-                    - 'lambda:UntagResource'
-                    - 'lambda:RemoveLayerVersionPermission'
-                    - 'lambda:PutFunctionConcurrency'
-                    - 'lambda:DeleteCodeSigningConfig'
-                    - 'lambda:ListTags'
-                    - 'lambda:GetRuntimeManagementConfig'
-                    - 'lambda:DeleteLayerVersion'
-                    - 'lambda:PutFunctionEventInvokeConfig'
-                    - 'lambda:DeleteFunctionEventInvokeConfig'
-                    - 'lambda:CreateCodeSigningConfig'
-                    - 'lambda:PutFunctionCodeSigningConfig'
-                    - 'lambda:UpdateEventSourceMapping'
-                    - 'lambda:UpdateFunctionCodeSigningConfig'
                     - 'lambda:GetFunction'
-                    - 'lambda:UpdateFunctionConfiguration'
-                    - 'lambda:ListFunctionUrlConfigs'
-                    - 'lambda:UpdateCodeSigningConfig'
                     - 'lambda:AddPermission'
-                    - 'lambda:GetFunctionEventInvokeConfig'
-                    - 'lambda:DeleteAlias'
-                    - 'lambda:DeleteFunctionConcurrency'
-                    - 'lambda:GetCodeSigningConfig'
-                    - 'lambda:DeleteFunctionUrlConfig'
                     - 'lambda:RemovePermission'
-                    - 'lambda:GetPolicy'
-                  Resource: '*'
-          - PolicyName: CFTIAMS3Policy
-            PolicyDocument:
-              Version: "2012-10-17"
-              Statement:
-                - Effect: "Allow"
-                  Action:
-                    - 's3:PutObject'
-                    - 's3:GetObject'
-                    - 's3:CreateBucket'
-                    - 's3:PutBucketPublicAccessBlock'
-                    - 's3-object-lambda:GetObject'
-                    - 's3-object-lambda:ListBucket'
-                    - 's3-object-lambda:PutObject'
-                  Resource: '*'
-          - PolicyName: CFTIAMPolicy
-            PolicyDocument:
-              Version: "2012-10-17"
-              Statement:
-                - Effect: "Allow"
-                  Action:
-                    - 'iam:PutRolePolicy'
-                  Resource: '*'
+                  Resource: 
+                    - !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:LambdaPinpointOutboundCampaign-${AWS::AccountId}"
+                    - !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:LambdaAPI-${AWS::AccountId}"
+                    - !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:LambdaPinpointSMSEmail-${AWS::AccountId}"
         AssumeRolePolicyDocument:
           Version: "2012-10-17"
           Statement:
@@ -429,48 +383,10 @@ Resources:
       Properties:
         Body: "Hello, this is a message is to inform you that your child's bus has been delayed. We will send another message once the bus starts moving again. Thank you!"
         TemplateName: "Bus-SMS-Channel-Template"
-    # LambdaLayerCreate:
-    #   Type: AWS::Lambda::Function
-    #   Properties:
-    #     Environment:
-    #       Variables:
-    #         ConnectID: !Ref ConnectInstanceID
-    #     Role: !GetAtt LambdaAPIIAMRole.Arn
-    #     Handler: index.lambda_handler
-    #     Runtime: "python3.9"
-    #     Timeout: 20
-    #     Code:
-    #       ZipFile: |
-    #         import json
-    #         import boto3
-    #         import os
-
-    #         client = boto3.client('lambda')
-
-    #         connect_instance_id = os.environ.get('ConnectID')
-    #         name = "bus-demo" + "-" + connect_instance_id
-
-    #         def createLayer():
-    #             response = client.publish_layer_version(
-    #                 LayerName='Bus-Demo-Lambda-Layer',
-    #                 Content={
-    #                     'S3Bucket': name,
-    #                     'S3Key': 'my-deployment-package.zip'
-    #                 },
-    #                 CompatibleRuntimes=[
-    #                     'python3.9'
-    #                 ]
-    #             )
-
-    #         def lambda_handler(event, context):
-    #             createLayer()
-    #             return {
-    #                 'statusCode': 200,
-    #                 'body': json.dumps('Hello from Lambda!')
-    #             }
     LambdaAPI:
       Type: AWS::Lambda::Function
       Properties:
+        FunctionName: !Sub 'LambdaAPI-${AWS::AccountId}'
         Environment:
           Variables:
             LexBotName : !GetAtt LexBotAlias.Arn
@@ -529,6 +445,7 @@ Resources:
     LambdaPinpointSMSEmail:
       Type: AWS::Lambda::Function
       Properties:
+        FunctionName: !Sub 'LambdaPinpointSMSEmail-${AWS::AccountId}'
         Environment:
           Variables:
             PinpointApplicationId : !Ref PinpointProject
@@ -624,6 +541,7 @@ Resources:
     LambdaPinpointOutboundCampaign:
       Type: AWS::Lambda::Function
       Properties:
+        FunctionName: !Sub 'LambdaPinpointOutboundCampaign-${AWS::AccountId}'
         Environment:
           Variables:
             PinpointApplicationId : !Ref PinpointProject
@@ -701,36 +619,6 @@ Resources:
                 return {
                     'statusCode': 200,
                     'body': json.dumps('Hello from Lambda!')
-                }
-    LambdaLexFulfillment:
-      Type: AWS::Lambda::Function
-      Properties:
-        Role: !GetAtt LambdaIAMRole.Arn
-        Handler: index.lambda_handler
-        Runtime: "python3.9"
-        Code:
-          ZipFile: |
-            import json
-            import boto3
-            from boto3.dynamodb.conditions import Key
-            import datetime
-            import random
-
-
-            def lambda_handler(event, context):
-                currSlots = event['currentIntent']['slots']
-                busNum = currSlots['BusNumber']
-                busNum = str(busNum)
-
-                return {
-                    "dialogAction": {
-                        "type": "Close",
-                        "fulfillmentState": "Fulfilled",
-                        "message": {
-                            "contentType": "PlainText",
-                            "content": "Thank you! I will go ahead and update the bus status and send an update to the student's parents."
-                        }
-                    }
                 }
     MainContactFlow:
       Type: AWS::Connect::ContactFlow
