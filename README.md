@@ -1,10 +1,7 @@
 ## Multi Channel Outbound Communication for Schools
 
-TODO: Fill this README out!
-
-Be sure to:
-
 * This GitHub repo contains the code needed to deploy the multi channel outbound communications for schools blog.
+
 
 ## Security
 
